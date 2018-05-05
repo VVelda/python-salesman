@@ -1,11 +1,12 @@
 from collections import deque
-from city        import GeoCoord, GeoCity, Euc_2D
+from .city       import *
 
 def minimal_tsp():
     return { "COMMENT"          : ""
            , "DIMENSION"        : None
            , "TYPE"             : None
            , "EDGE_WEIGHT_TYPE" : None
+           ,"EDGE_WEIGHT_FORMAT": None
            , "CITIES"           : []}
 
 def scan_keywords(tsp,tspfile):
@@ -23,7 +24,9 @@ def scan_keywords(tsp,tspfile):
             tsp["DIMENSION"] = int(" ".join(words).strip(": "))
         elif keyword == "EDGE_WEIGHT_TYPE":
             tsp["EDGE_WEIGHT_TYPE"] = " ".join(words).strip(": ")
-        elif keyword == "NODE_COORD_SECTION":
+        elif keyword == "EDGE_WEIGHT_FORMAT":
+            tsp["EDGE_WEIGHT_FORMAT"] = " ".join(words).strip(": ")
+        elif keyword in ["NODE_COORD_SECTION", "EDGE_WEIGHT_SECTION"]:
             break
 
 def read_int(words):
@@ -33,6 +36,12 @@ def read_euc_2d_city(words):
     x = float(words.popleft())
     y = float(words.popleft())
     return Euc_2D(x, y)
+
+def read_euc_3d_city(words):
+    x = float(words.popleft())
+    y = float(words.popleft())
+    z = float(words.popleft())
+    return Euc_3D(x, y, z)
 
 def read_geo_coord(words):
     [degrees, minutes] = map(int, words.popleft().split("."))
@@ -57,16 +66,40 @@ def read_numbered_euc_2d_city_line(desired_number, words):
     else:
         print("Missing or mislabeld city: expected {0}".format(desired_number))
 
+def read_numbered_euc_3d_city_line(desired_number, words):
+    city_number = read_int(words)
+    if city_number == desired_number:
+        return read_euc_3d_city(words)
+    else:
+        print("Missing or mislabeld city: expected {0}".format(desired_number))
+
+def read_matrix(desired_number, file):
+	matrix = []
+	nodes = []
+	for n in range(desired_number):
+		line = [float(i) for i in file.readline().split()]
+		if len(line) != desired_number:
+			print("Missing or too much columns: expected {0}".format(desired_number))
+		else:
+			matrix.append(line)
+			nodes.append(MatrixCity(n, matrix))
+	return nodes
+
 def read_cities(tsp,tspfile):
-    for n in range(1, tsp["DIMENSION"] + 1):
-        line  = tspfile.readline()
-        words = deque(line.split())
-        if tsp["EDGE_WEIGHT_TYPE"] == "EUC_2D":
-            tsp["CITIES"].append(read_numbered_euc_2d_city_line(n, words))
-        elif tsp["EDGE_WEIGHT_TYPE"] == "GEO":
-            tsp["CITIES"].append(read_numbered_geo_city_line(n, words))
-        else:
-            print("Unsupported coordinate type: " + tsp["EDGE_WEIGHT_TYPE"])
+	if tsp["EDGE_WEIGHT_TYPE"] == "EXPLICIT" and tsp["EDGE_WEIGHT_FORMAT"] == "FULL_MATRIX":
+		tsp["CITIES"].extend(read_matrix(tsp["DIMENSION"], tspfile))
+	else:
+		for n in range(1, tsp["DIMENSION"] + 1):
+			line  = tspfile.readline()
+			words = deque(line.split())
+			if tsp["EDGE_WEIGHT_TYPE"] == "EUC_2D":
+				tsp["CITIES"].append(read_numbered_euc_2d_city_line(n, words))
+			elif tsp["EDGE_WEIGHT_TYPE"] == "EUC_3D":
+				tsp["CITIES"].append(read_numbered_euc_3d_city_line(n, words))
+			elif tsp["EDGE_WEIGHT_TYPE"] == "GEO":
+				tsp["CITIES"].append(read_numbered_geo_city_line(n, words))
+			else:
+				print("Unsupported coordinate type: " + tsp["EDGE_WEIGHT_TYPE"])
             
 def read_tsp_file(path):
     tspfile = open(path,'r')
